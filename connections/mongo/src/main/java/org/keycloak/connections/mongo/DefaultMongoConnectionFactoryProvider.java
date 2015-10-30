@@ -173,7 +173,7 @@ public class DefaultMongoConnectionFactoryProvider implements MongoConnectionPro
             operationalInfo.put("mongoHosts", hosts);
             operationalInfo.put("mongoDatabaseName", dbName);
             operationalInfo.put("mongoUser", uri.getUsername());
-            operationalInfo.put("mongoDriverVersion", client.getVersion());
+            operationalInfo.put("mongoDriverVersion", "unknown");
 
             logger.debugv("Initialized mongo model. host(s): %s, db: %s", uri.getHosts(), dbName);
             return client;
@@ -188,7 +188,7 @@ public class DefaultMongoConnectionFactoryProvider implements MongoConnectionPro
 
             MongoClient client;
             if (user != null && password != null) {
-                MongoCredential credential = MongoCredential.createMongoCRCredential(user, dbName, password.toCharArray());
+                MongoCredential credential = MongoCredential.createCredential(user, dbName, password.toCharArray());
                 client = new MongoClient(new ServerAddress(host, port), Collections.singletonList(credential), clientOptions);
             } else {
                 client = new MongoClient(new ServerAddress(host, port), clientOptions);
@@ -197,7 +197,7 @@ public class DefaultMongoConnectionFactoryProvider implements MongoConnectionPro
             operationalInfo.put("mongoServerAddress", client.getAddress().toString());
             operationalInfo.put("mongoDatabaseName", dbName);
             operationalInfo.put("mongoUser", user);
-            operationalInfo.put("mongoDriverVersion", client.getVersion());
+            operationalInfo.put("mongoDriverVersion", "unknown");
 
             logger.debugv("Initialized mongo model. host: %s, port: %d, db: %s", host, port, dbName);
             return client;
@@ -213,9 +213,6 @@ public class DefaultMongoConnectionFactoryProvider implements MongoConnectionPro
         checkIntOption("socketTimeout", builder);
         checkBooleanOption("socketKeepAlive", builder);
         checkBooleanOption("autoConnectRetry", builder);
-        if (config.getLong("maxAutoConnectRetryTime") != null) {
-            builder.maxAutoConnectRetryTime(config.getLong("maxAutoConnectRetryTime"));
-        }
         if(config.getBoolean("ssl", false)) {
             builder.socketFactory(SSLSocketFactory.getDefault());
         }

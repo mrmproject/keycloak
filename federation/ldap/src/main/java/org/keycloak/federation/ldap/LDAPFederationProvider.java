@@ -1,6 +1,7 @@
 package org.keycloak.federation.ldap;
 
 import org.jboss.logging.Logger;
+import org.keycloak.common.constants.KerberosConstants;
 import org.keycloak.federation.kerberos.impl.KerberosUsernamePasswordAuthenticator;
 import org.keycloak.federation.kerberos.impl.SPNEGOAuthenticator;
 import org.keycloak.federation.ldap.idm.model.LDAPObject;
@@ -11,22 +12,8 @@ import org.keycloak.federation.ldap.idm.query.internal.LDAPQueryConditionsBuilde
 import org.keycloak.federation.ldap.idm.store.ldap.LDAPIdentityStore;
 import org.keycloak.federation.ldap.kerberos.LDAPProviderKerberosConfig;
 import org.keycloak.federation.ldap.mappers.LDAPFederationMapper;
-import org.keycloak.models.CredentialValidationOutput;
-import org.keycloak.models.GroupModel;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.LDAPConstants;
-import org.keycloak.models.ModelDuplicateException;
-import org.keycloak.models.ModelException;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.RoleModel;
-import org.keycloak.models.UserCredentialModel;
-import org.keycloak.models.UserCredentialValueModel;
 import org.keycloak.mappers.UserFederationMapper;
-import org.keycloak.models.UserFederationMapperModel;
-import org.keycloak.models.UserFederationProvider;
-import org.keycloak.models.UserFederationProviderModel;
-import org.keycloak.models.UserModel;
-import org.keycloak.common.constants.KerberosConstants;
+import org.keycloak.models.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,15 +31,13 @@ import java.util.Set;
  */
 public class LDAPFederationProvider implements UserFederationProvider {
     private static final Logger logger = Logger.getLogger(LDAPFederationProvider.class);
-
+    protected final Set<String> supportedCredentialTypes = new HashSet<>();
     protected LDAPFederationProviderFactory factory;
     protected KeycloakSession session;
     protected UserFederationProviderModel model;
     protected LDAPIdentityStore ldapIdentityStore;
     protected EditMode editMode;
     protected LDAPProviderKerberosConfig kerberosConfig;
-
-    protected final Set<String> supportedCredentialTypes = new HashSet<>();
 
     public LDAPFederationProvider(LDAPFederationProviderFactory factory, KeycloakSession session, UserFederationProviderModel model, LDAPIdentityStore ldapIdentityStore) {
         this.factory = factory;
@@ -119,7 +104,7 @@ public class LDAPFederationProvider implements UserFederationProvider {
     @Override
     public Set<String> getSupportedCredentialTypes(UserModel local) {
         Set<String> supportedCredentialTypes = new HashSet<String>(this.supportedCredentialTypes);
-        if (editMode == EditMode.UNSYNCED ) {
+        if (editMode == EditMode.UNSYNCED) {
             for (UserCredentialValueModel cred : local.getCredentialsDirectly()) {
                 if (cred.getType().equals(UserCredentialModel.PASSWORD)) {
                     // User has changed password in KC local database. Use KC password instead of LDAP password
@@ -142,8 +127,10 @@ public class LDAPFederationProvider implements UserFederationProvider {
 
     @Override
     public UserModel register(RealmModel realm, UserModel user) {
-        if (editMode == EditMode.READ_ONLY || editMode == EditMode.UNSYNCED) throw new IllegalStateException("Registration is not supported by this ldap server");
-        if (!synchronizeRegistrations()) throw new IllegalStateException("Registration is not supported by this ldap server");
+        if (editMode == EditMode.READ_ONLY || editMode == EditMode.UNSYNCED)
+            throw new IllegalStateException("Registration is not supported by this ldap server");
+        if (!synchronizeRegistrations())
+            throw new IllegalStateException("Registration is not supported by this ldap server");
 
         LDAPObject ldapUser = LDAPUtils.addUserToLDAP(this, realm, user);
         LDAPUtils.checkUuid(ldapUser, ldapIdentityStore.getConfig());
@@ -172,7 +159,7 @@ public class LDAPFederationProvider implements UserFederationProvider {
 
     @Override
     public List<UserModel> searchByAttributes(Map<String, String> attributes, RealmModel realm, int maxResults) {
-        List<UserModel> searchResults =new LinkedList<UserModel>();
+        List<UserModel> searchResults = new LinkedList<UserModel>();
 
         List<LDAPObject> ldapUsers = searchLDAP(realm, attributes, maxResults);
         for (LDAPObject ldapUser : ldapUsers) {
@@ -342,12 +329,34 @@ public class LDAPFederationProvider implements UserFederationProvider {
     public boolean validCredentials(RealmModel realm, UserModel user, List<UserCredentialModel> input) {
         for (UserCredentialModel cred : input) {
             if (cred.getType().equals(UserCredentialModel.PASSWORD)) {
-                return validPassword(realm, user, cred.getValue());
+                // on successfull password check, remove all ldap groups assigned to the user
+                // refetch the groups from ldap and assign them once again to the user
+                // this works only if federation provider is UNSYNCED
+                // motivation: remove unsued groups and add new ones from ldap to the user
+                return reloadUserLdapGroups(realm, user, cred);
             } else {
                 return false; // invalid cred type
             }
         }
         return true;
+    }
+
+    protected boolean reloadUserLdapGroups(RealmModel realm, UserModel user, UserCredentialModel cred) {
+        if (validPassword(realm, user, cred.getValue())) {
+            LDAPObject ldapUser = loadLDAPUserByUsername(realm, user.getUsername());
+
+            Set<UserFederationMapperModel> federationMappers = realm.getUserFederationMappersByFederationProvider(getModel().getId());
+            for (UserFederationMapperModel mapperModel : federationMappers) {
+                if (logger.isTraceEnabled()) {
+                    logger.tracef("Using mapper %s during import user from LDAP", mapperModel);
+                }
+                LDAPFederationMapper ldapMapper = getMapper(mapperModel);
+                ldapMapper.onImportUserFromLDAP(mapperModel, this, ldapUser, user, realm, true);
+            }
+
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -383,7 +392,7 @@ public class LDAPFederationProvider implements UserFederationProvider {
 
                         return new CredentialValidationOutput(user, CredentialValidationOutput.Status.AUTHENTICATED, state);
                     }
-                }  else {
+                } else {
                     state.put(KerberosConstants.RESPONSE_TOKEN, spnegoAuthenticator.getResponseToken());
                     return new CredentialValidationOutput(null, CredentialValidationOutput.Status.CONTINUE, state);
                 }
@@ -400,7 +409,7 @@ public class LDAPFederationProvider implements UserFederationProvider {
     /**
      * Called after successful kerberos authentication
      *
-     * @param realm realm
+     * @param realm    realm
      * @param username username without realm prefix
      * @return finded or newly created user
      */
@@ -417,7 +426,7 @@ public class LDAPFederationProvider implements UserFederationProvider {
                     return proxy(realm, user, ldapObject);
                 } else {
                     logger.warnf("User with username [%s] aready exists and is linked to provider [%s] but is not valid. Stale LDAP_ID on local user is: %s",
-                            username,  model.getDisplayName(), user.getFirstAttribute(LDAPConstants.LDAP_ID));
+                            username, model.getDisplayName(), user.getFirstAttribute(LDAPConstants.LDAP_ID));
                     logger.warn("Will re-create user");
                     session.userStorage().removeUser(realm, user);
                 }
