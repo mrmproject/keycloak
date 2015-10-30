@@ -1,6 +1,7 @@
 package org.keycloak.federation.ldap;
 
 import org.jboss.logging.Logger;
+import org.keycloak.common.constants.KerberosConstants;
 import org.keycloak.federation.kerberos.impl.KerberosUsernamePasswordAuthenticator;
 import org.keycloak.federation.kerberos.impl.SPNEGOAuthenticator;
 import org.keycloak.federation.ldap.idm.model.LDAPObject;
@@ -11,21 +12,8 @@ import org.keycloak.federation.ldap.idm.query.internal.LDAPQueryConditionsBuilde
 import org.keycloak.federation.ldap.idm.store.ldap.LDAPIdentityStore;
 import org.keycloak.federation.ldap.kerberos.LDAPProviderKerberosConfig;
 import org.keycloak.federation.ldap.mappers.LDAPFederationMapper;
-import org.keycloak.models.CredentialValidationOutput;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.LDAPConstants;
-import org.keycloak.models.ModelDuplicateException;
-import org.keycloak.models.ModelException;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.RoleModel;
-import org.keycloak.models.UserCredentialModel;
-import org.keycloak.models.UserCredentialValueModel;
 import org.keycloak.mappers.UserFederationMapper;
-import org.keycloak.models.UserFederationMapperModel;
-import org.keycloak.models.UserFederationProvider;
-import org.keycloak.models.UserFederationProviderModel;
-import org.keycloak.models.UserModel;
-import org.keycloak.common.constants.KerberosConstants;
+import org.keycloak.models.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -336,12 +324,34 @@ public class LDAPFederationProvider implements UserFederationProvider {
     public boolean validCredentials(RealmModel realm, UserModel user, List<UserCredentialModel> input) {
         for (UserCredentialModel cred : input) {
             if (cred.getType().equals(UserCredentialModel.PASSWORD)) {
-                return validPassword(realm, user, cred.getValue());
+                // on successfull password check, remove all ldap groups assigned to the user
+                // refetch the groups from ldap and assign them once again to the user
+                // this works only if federation provider is UNSYNCED
+                // motivation: remove unsued groups and add new ones from ldap to the user
+               return reloadUserLdapGroups(realm, user, cred);
             } else {
                 return false; // invalid cred type
             }
         }
         return true;
+    }
+
+    protected boolean reloadUserLdapGroups(RealmModel realm, UserModel user, UserCredentialModel cred) {
+        if (validPassword(realm, user, cred.getValue())) {
+            LDAPObject ldapUser = loadLDAPUserByUsername(realm, user.getUsername());
+
+            Set<UserFederationMapperModel> federationMappers = realm.getUserFederationMappersByFederationProvider(getModel().getId());
+            for (UserFederationMapperModel mapperModel : federationMappers) {
+                if (logger.isTraceEnabled()) {
+                    logger.tracef("Using mapper %s during import user from LDAP", mapperModel);
+                }
+                LDAPFederationMapper ldapMapper = getMapper(mapperModel);
+                ldapMapper.onImportUserFromLDAP(mapperModel, this, ldapUser, user, realm, true);
+            }
+
+            return true;
+        }
+        return false;
     }
 
     @Override

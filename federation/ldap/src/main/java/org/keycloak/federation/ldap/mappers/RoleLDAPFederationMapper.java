@@ -69,13 +69,21 @@ public class RoleLDAPFederationMapper extends AbstractLDAPFederationMapper {
 
         Mode mode = getMode(mapperModel);
 
-        // For now, import LDAP role mappings just during create
-        if (mode == Mode.IMPORT && isCreate) {
+        // we removed only new user check, since we need to reload groups on each login
+        if (mode == Mode.IMPORT) {
 
             List<LDAPObject> ldapRoles = getLDAPRoleMappings(mapperModel, ldapProvider, ldapUser);
 
             // Import role mappings from LDAP into Keycloak DB
             String roleNameAttr = getRoleNameLdapAttribute(mapperModel);
+
+            // remove each group assigned to user which has the mappings name
+            for (RoleModel roleModel : user.getRoleMappings()) {
+                if (roleModel.getDescription().equals(mapperModel.getName())) {
+                    user.deleteRoleMapping(roleModel);
+                }
+            }
+
             for (LDAPObject ldapRole : ldapRoles) {
                 String roleName = ldapRole.getAttributeAsString(roleNameAttr);
 
@@ -110,7 +118,8 @@ public class RoleLDAPFederationMapper extends AbstractLDAPFederationMapper {
 
                 if (roleContainer.getRole(roleName) == null) {
                     logger.debugf("Syncing role [%s] from LDAP to keycloak DB", roleName);
-                    roleContainer.addRole(roleName);
+                    RoleModel roleModel = roleContainer.addRole(roleName);
+                    roleModel.setDescription(mapperModel.getName());
                 }
             }
 

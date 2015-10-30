@@ -6,6 +6,7 @@ import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
+import com.mongodb.DuplicateKeyException;
 import com.mongodb.MongoException;
 import com.mongodb.WriteResult;
 import org.jboss.logging.Logger;
@@ -133,7 +134,7 @@ public class MongoStoreImpl implements MongoStore {
     }
 
     public static ModelException convertException(MongoException e) {
-        if (e instanceof MongoException.DuplicateKey) {
+        if (e instanceof DuplicateKeyException) {
             return new ModelDuplicateException(e);
         } else {
             return new ModelException(e);
