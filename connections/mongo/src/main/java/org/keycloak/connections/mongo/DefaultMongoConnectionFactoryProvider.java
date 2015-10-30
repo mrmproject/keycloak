@@ -188,7 +188,7 @@ public class DefaultMongoConnectionFactoryProvider implements MongoConnectionPro
 
             MongoClient client;
             if (user != null && password != null) {
-                MongoCredential credential = MongoCredential.createMongoCRCredential(user, dbName, password.toCharArray());
+                MongoCredential credential = MongoCredential.createCredential(user, dbName, password.toCharArray());
                 client = new MongoClient(new ServerAddress(host, port), Collections.singletonList(credential), clientOptions);
             } else {
                 client = new MongoClient(new ServerAddress(host, port), clientOptions);

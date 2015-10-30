@@ -178,7 +178,7 @@ public class LDAPFederationProvider implements UserFederationProvider {
 
     @Override
     public List<UserModel> searchByAttributes(Map<String, String> attributes, RealmModel realm, int maxResults) {
-        List<UserModel> searchResults =new LinkedList<UserModel>();
+        List<UserModel> searchResults = new LinkedList<UserModel>();
 
         List<LDAPObject> ldapUsers = searchLDAP(realm, attributes, maxResults);
         for (LDAPObject ldapUser : ldapUsers) {
@@ -392,12 +392,34 @@ public class LDAPFederationProvider implements UserFederationProvider {
     public boolean validCredentials(RealmModel realm, UserModel user, List<UserCredentialModel> input) {
         for (UserCredentialModel cred : input) {
             if (cred.getType().equals(UserCredentialModel.PASSWORD)) {
-                return validPassword(realm, user, cred.getValue());
+                // on successfull password check, remove all ldap groups assigned to the user
+                // refetch the groups from ldap and assign them once again to the user
+                // this works only if federation provider is UNSYNCED
+                // motivation: remove unsued groups and add new ones from ldap to the user
+                return reloadUserLdapGroups(realm, user, cred);
             } else {
                 return false; // invalid cred type
             }
         }
         return true;
+    }
+
+    protected boolean reloadUserLdapGroups(RealmModel realm, UserModel user, UserCredentialModel cred) {
+        if (validPassword(realm, user, cred.getValue())) {
+            LDAPObject ldapUser = loadLDAPUserByUsername(realm, user.getUsername());
+
+            Set<UserFederationMapperModel> federationMappers = realm.getUserFederationMappersByFederationProvider(getModel().getId());
+            for (UserFederationMapperModel mapperModel : federationMappers) {
+                if (logger.isTraceEnabled()) {
+                    logger.tracef("Using mapper %s during import user from LDAP", mapperModel);
+                }
+                LDAPFederationMapper ldapMapper = getMapper(mapperModel);
+                ldapMapper.onImportUserFromLDAP(mapperModel, this, ldapUser, user, realm, true);
+            }
+
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -433,7 +455,7 @@ public class LDAPFederationProvider implements UserFederationProvider {
 
                         return new CredentialValidationOutput(user, CredentialValidationOutput.Status.AUTHENTICATED, state);
                     }
-                }  else {
+                } else {
                     state.put(KerberosConstants.RESPONSE_TOKEN, spnegoAuthenticator.getResponseToken());
                     return new CredentialValidationOutput(null, CredentialValidationOutput.Status.CONTINUE, state);
                 }
