@@ -23,7 +23,6 @@ public class EqualCondition extends NamedParameterCondition {
         ESCAPE_TABLE.put(')', "\\29");
     }
 
-    private final QueryParameter parameter;
     private final Object value;
 
     public EqualCondition(String name, Object value) {

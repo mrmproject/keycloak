@@ -214,6 +214,7 @@ public class DefaultMongoConnectionFactoryProvider implements MongoConnectionPro
         checkBooleanOption("autoConnectRetry", builder);
         if(config.getBoolean("ssl", false)) {
             builder.socketFactory(SSLSocketFactory.getDefault());
+            builder.sslInvalidHostNameAllowed(true);
         }
 
         return builder.build();
