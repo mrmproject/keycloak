@@ -104,20 +104,25 @@ public class GroupsResource {
         this.auth.requireManage();
         GroupModel child = null;
         Response.ResponseBuilder builder = Response.status(204);
+//        if (rep.getId() != null) {
+//            child = realm.getGroupById(rep.getId());
+//            if (child == null) {
+//                throw new NotFoundException("Could not find child by id");
+//            }
+//            adminEvent.operation(OperationType.UPDATE).resourcePath(uriInfo).representation(rep).success();
+//        }
+//        else {
         if (rep.getId() != null) {
-            child = realm.getGroupById(rep.getId());
-            if (child == null) {
-                throw new NotFoundException("Could not find child by id");
-            }
-            adminEvent.operation(OperationType.UPDATE).resourcePath(uriInfo).representation(rep).success();
+            child = realm.createGroup(rep.getId(), rep.getName());
         } else {
             child = realm.createGroup(rep.getName());
+        }
             GroupResource.updateGroup(rep, child);
             URI uri = uriInfo.getAbsolutePathBuilder()
                     .path(child.getId()).build();
             builder.status(201).location(uri);
             adminEvent.operation(OperationType.CREATE).resourcePath(uriInfo).representation(rep).success();
-        }
+//        }
         realm.moveGroup(child, null);
         return builder.build();
     }
