@@ -41,7 +41,6 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -95,11 +94,15 @@ public class RoleContainerResource extends RoleResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response createRole(final RoleRepresentation rep) {
         auth.requireManage();
-
+        RoleModel role = null;
         try {
-            RoleModel role = roleContainer.addRole(rep.getName());
+            if (rep.getId() != null) {
+                role = roleContainer.addRole(rep.getId(), rep.getName());
+            } else {
+                role = roleContainer.addRole(rep.getName());
+            }
             role.setDescription(rep.getDescription());
-            boolean scopeParamRequired = rep.isScopeParamRequired()==null ? false : rep.isScopeParamRequired();
+            boolean scopeParamRequired = rep.isScopeParamRequired() == null ? false : rep.isScopeParamRequired();
             role.setScopeParamRequired(scopeParamRequired);
 
             adminEvent.operation(OperationType.CREATE).resourcePath(uriInfo, role.getId()).representation(rep).success();
@@ -252,8 +255,8 @@ public class RoleContainerResource extends RoleResource {
     @NoCache
     @Produces(MediaType.APPLICATION_JSON)
     public Set<RoleRepresentation> getClientRoleComposites(@Context final UriInfo uriInfo,
-                                                                final @PathParam("role-name") String roleName,
-                                                                final @PathParam("client") String client) {
+                                                           final @PathParam("role-name") String roleName,
+                                                           final @PathParam("client") String client) {
         auth.requireManage();
 
         RoleModel role = roleContainer.getRole(roleName);
@@ -273,14 +276,14 @@ public class RoleContainerResource extends RoleResource {
      * Remove roles from the role's composite
      *
      * @param roleName role's name (not id!)
-     * @param roles roles to remove
+     * @param roles    roles to remove
      */
     @Path("{role-name}/composites")
     @DELETE
     @Consumes(MediaType.APPLICATION_JSON)
     public void deleteComposites(
-                                   final @PathParam("role-name") String roleName,
-                                   List<RoleRepresentation> roles) {
+            final @PathParam("role-name") String roleName,
+            List<RoleRepresentation> roles) {
         auth.requireManage();
 
         RoleModel role = roleContainer.getRole(roleName);

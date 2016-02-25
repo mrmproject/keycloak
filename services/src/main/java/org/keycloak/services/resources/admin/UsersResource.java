@@ -201,7 +201,12 @@ public class UsersResource {
         }
 
         try {
-            UserModel user = session.users().addUser(realm, rep.getUsername());
+            UserModel user = null;
+            if (rep.getId() != null) {
+                user = session.users().addUser(realm, rep.getId(), rep.getUsername(), true, true);
+            } else {
+                user = session.users().addUser(realm, rep.getUsername());
+            }
             Set<String> emptySet = Collections.emptySet();
             updateUserFromRep(user, rep, emptySet, realm, session);
 
