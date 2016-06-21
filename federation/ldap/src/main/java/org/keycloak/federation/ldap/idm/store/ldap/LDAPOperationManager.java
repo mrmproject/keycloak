@@ -48,6 +48,7 @@ import javax.naming.ldap.PagedResultsControl;
 import javax.naming.ldap.PagedResultsResponseControl;
 
 import org.jboss.logging.Logger;
+import org.keycloak.Config;
 import org.keycloak.federation.ldap.LDAPConfig;
 import org.keycloak.federation.ldap.idm.query.internal.LDAPQuery;
 import org.keycloak.models.LDAPConstants;
@@ -65,9 +66,11 @@ public class LDAPOperationManager {
 
     private final LDAPConfig config;
     private final Map<String, Object> connectionProperties;
+    private final Config.Scope serverConfig;
 
     public LDAPOperationManager(LDAPConfig config) throws NamingException {
         this.config = config;
+        this.serverConfig = Config.scope("ldap");
         this.connectionProperties = Collections.unmodifiableMap(createConnectionProperties());
     }
 
@@ -479,6 +482,10 @@ public class LDAPOperationManager {
         String authType = this.config.getAuthType();
         env.put(Context.INITIAL_CONTEXT_FACTORY, this.config.getFactoryName());
         env.put(Context.SECURITY_AUTHENTICATION, authType);
+        env.put("com.sun.jndi.ldap.connect.timeout", serverConfig.get("connectionTimeout", "10000"));
+        env.put("com.sun.jndi.ldap.read.timeout", serverConfig.get("readTimeout", "10000"));
+        env.put("com.sun.jndi.ldap.connect.pool.timeout", serverConfig.get("poolTimeout", "60000"));
+
 
         String bindDN = this.config.getBindDN();
 

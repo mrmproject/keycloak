@@ -71,5 +71,10 @@
         "default": {
             "cacheContainer" : "java:comp/env/infinispan/Keycloak"
         }
+    },
+    "ldap": {
+        "connectionTimeout": "5000",
+        "readTimeout": "10000",
+        "poolTimeout": "60000"
     }
 }
