@@ -478,6 +478,8 @@ public class LDAPOperationManager {
         String authType = this.config.getAuthType();
         env.put(Context.INITIAL_CONTEXT_FACTORY, this.config.getFactoryName());
         env.put(Context.SECURITY_AUTHENTICATION, authType);
+        env.put("com.sun.jndi.ldap.connect.timeout", "10000");
+        env.put("com.sun.jndi.ldap.read.timeout","10000");
 
         String bindDN = this.config.getBindDN();
 

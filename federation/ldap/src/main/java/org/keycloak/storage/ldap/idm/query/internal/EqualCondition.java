@@ -21,17 +21,29 @@ import org.keycloak.models.LDAPConstants;
 import org.keycloak.storage.ldap.idm.store.ldap.LDAPUtil;
 
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author Pedro Igor
  */
 public class EqualCondition extends NamedParameterCondition {
 
+    private static Map<Character, String> ESCAPE_TABLE;
+    // ldap query escaped characters
+    static {
+        ESCAPE_TABLE = new HashMap<>();
+        ESCAPE_TABLE.put('\\', "\\5c");
+        ESCAPE_TABLE.put('*', "\\2a");
+        ESCAPE_TABLE.put('(', "\\28");
+        ESCAPE_TABLE.put(')', "\\29");
+    }
+
     private final Object value;
 
     public EqualCondition(String name, Object value) {
         super(name);
-        this.value = value;
+        this.value = escpaedValue(value);
     }
 
     public Object getValue() {
@@ -46,6 +58,23 @@ public class EqualCondition extends NamedParameterCondition {
         }
 
         filter.append("(").append(getParameterName()).append(LDAPConstants.EQUAL).append(parameterValue).append(")");
+    }
+
+    protected Object escpaedValue(Object value) {
+        if (value instanceof String) {
+            String stringValue = (String) value;
+            StringBuilder stringBuilder = new StringBuilder();
+
+            for (char c : stringValue.toCharArray()) {
+                if (ESCAPE_TABLE.containsKey(c)) {
+                    stringBuilder.append(ESCAPE_TABLE.get(c));
+                } else {
+                    stringBuilder.append(c);
+                }
+            }
+            return stringBuilder.toString();
+        }
+        return value;
     }
 
     @Override
